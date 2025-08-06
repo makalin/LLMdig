@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  llmdig:
+    build: .
+    ports:
+      - "9000:9000/udp"
+    environment:
+      - RUST_LOG=info
+      - LLMDIG_LLM_BACKEND=openai
+      - LLMDIG_LLM_MODEL=gpt-3.5-turbo
+      - LLMDIG_LLM_MAX_TOKENS=256
+      - LLMDIG_LLM_TEMPERATURE=0.7
+      - LLMDIG_RATE_LIMIT_ENABLED=true
+      - LLMDIG_RATE_LIMIT_REQUESTS_PER_MINUTE=60
+      - LLMDIG_RATE_LIMIT_BURST_SIZE=10
+    env_file:
+      - .env
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "dig", "@localhost", "-p", "9000", "health.check", "TXT", "+short"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  llmdig-ollama:
+    build: .
+    ports:
+      - "9001:9000/udp"
+    environment:
+      - RUST_LOG=info
+      - LLMDIG_LLM_BACKEND=ollama
+      - LLMDIG_LLM_MODEL=llama2
+      - LLMDIG_LLM_MAX_TOKENS=256
+      - LLMDIG_LLM_TEMPERATURE=0.7
+      - LLMDIG_RATE_LIMIT_ENABLED=true
+      - LLMDIG_RATE_LIMIT_REQUESTS_PER_MINUTE=30
+      - LLMDIG_RATE_LIMIT_BURST_SIZE=5
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  # Development service with hot reload
+  llmdig-dev:
+    build: .
+    ports:
+      - "9002:9000/udp"
+    environment:
+      - RUST_LOG=debug
+      - LLMDIG_LLM_BACKEND=openai
+      - LLMDIG_LLM_MODEL=gpt-3.5-turbo
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src:ro
+      - ./config.toml:/app/config.toml:ro
+    command: ["cargo", "run", "--release"]
+    profiles:
+      - dev
+
+volumes:
+  ollama_data: 
